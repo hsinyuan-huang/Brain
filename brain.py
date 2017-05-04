@@ -3,17 +3,19 @@ import cPickle as pickle
 from collections import deque
 
 # Hyperparameters for machine learning algorithm
-decay_rate = 0.9 # RMSProp decay rate
-learning_rate = 1e-3 # gradient descent learning rate
-batch_size = 20 # number of episodes for one update
+decay_rate = 0.9  # RMSProp decay rate
+learning_rate = 1e-3  # gradient descent learning rate
+batch_size = 20  # number of episodes for one update
+
 
 def load_frozen_brain(frozen_brain):
     return pickle.load(open(frozen_brain + '.p', 'rb'))
 
-class brain: # {{{
+
+class brain:  # {{{
     # gamma measures how myopic is the brain (0: myopic, 1: long-sighted)
     # sag measures how long backward in time he remember the situation
-    def __init__(self, D = 3, H = [6], O = 2, gamma = 0.99, sag = 3, err = 0.0):
+    def __init__(self, D=3, H=[6], O=2, gamma=0.99, sag=3, err=0.0):
         self.D = D
         self.sag = sag
         self.err = err
@@ -29,21 +31,24 @@ class brain: # {{{
         self.episode_N = 0
         self.gamma = gamma
 
-        self.HN = len(H) # number of hidden layers
-        self.O = O; # number of actions
+        self.HN = len(H)  # number of hidden layers
+        self.O = O  # number of actions
         self.model = {}
 
-        self.model[0] = np.random.randn(H[0], D * self.sag) / np.sqrt(D * self.sag) # "Xavier" initialization
+        self.model[0] = np.random.randn(
+            H[0], D * self.sag) / np.sqrt(D * self.sag)  # "Xavier" initialization
         self.buf_h[0] = []
         for i in range(1, self.HN):
-            self.model[i] = np.random.randn(H[i], H[i-1]) / np.sqrt(H[i-1])
+            self.model[i] = np.random.randn(H[i], H[i - 1]) / np.sqrt(H[i - 1])
             self.buf_h[i] = []
         self.model[self.HN] = np.random.randn(O, H[-1]) / np.sqrt(H[-1])
 
         # The average of gradients over one batch
-        self.ttl_grad_W = { k : np.zeros_like(v) for k, v in self.model.iteritems() }
+        self.ttl_grad_W = {k: np.zeros_like(v)
+                           for k, v in self.model.iteritems()}
         # rmsprop memory
-        self.rmsprop_cache = { k : np.zeros_like(v) for k,v in self.model.iteritems() }
+        self.rmsprop_cache = {k: np.zeros_like(
+            v) for k, v in self.model.iteritems()}
 
     def softmax(self, Y):
         """Compute softmax values for a set of values Yi."""
@@ -55,7 +60,7 @@ class brain: # {{{
         discounted_r = []
         running_add = 0
         for t in reversed(xrange(0, r.size)):
-            if(r[t] != r[t]): # reaches the end of episode
+            if(r[t] != r[t]):  # reaches the end of episode
                 running_add = 0
                 continue
 
@@ -69,13 +74,13 @@ class brain: # {{{
         h[0] = np.dot(self.model[0], x)
 
         for i in range(1, self.HN):
-            h[i] = np.dot(self.model[i], h[i-1])
-            h[i][h[i] < 0] = 0 # ReLU nonlinearity
+            h[i] = np.dot(self.model[i], h[i - 1])
+            h[i][h[i] < 0] = 0  # ReLU nonlinearity
 
         Q = np.dot(self.model[self.HN], h[self.HN - 1])
         p = self.softmax(Q)
 
-        return p, h # return probabilitys, and hidden states
+        return p, h  # return probabilitys, and hidden states
 
     # x: episodes x feature_N
     # h: dict of episodes x hidden_N
@@ -86,13 +91,13 @@ class brain: # {{{
 
         # grad_h: xxxx_N x episodes
         grad_h = np.dot(self.model[self.HN].T, grad_o.T)
-        grad_h[h[self.HN - 1].T <= 0] = 0 # backprop ReLU
+        grad_h[h[self.HN - 1].T <= 0] = 0  # backprop ReLU
 
         for i in range(self.HN - 2, -1, -1):
             dW[i + 1] = np.dot(grad_h, h[i])
 
             grad_h = np.dot(self.model[i + 1].T, grad_h)
-            grad_h[h[i].T <= 0] = 0 # backprop ReLU
+            grad_h[h[i].T <= 0] = 0  # backprop ReLU
 
         dW[0] = np.dot(grad_h, x)
 
@@ -107,10 +112,11 @@ class brain: # {{{
         prob, h = self.policy_forward(feature)
 
         if(np.random.uniform() < self.err):
-            A = np.random.choice(self.O, 1) # Make complete random action
-        else :
-            A = np.random.choice(self.O, 1, p = prob) # Make stochastic action
-        Y = np.zeros(self.O); Y[A] = 1.0
+            A = np.random.choice(self.O, 1)  # Make complete random action
+        else:
+            A = np.random.choice(self.O, 1, p=prob)  # Make stochastic action
+        Y = np.zeros(self.O)
+        Y[A] = 1.0
 
         # Record the action detail for updating the policy
         self.buf_x.append(feature)
@@ -120,10 +126,10 @@ class brain: # {{{
 
         return A
 
-    def receive_feedback(self, reward, done): # done means an episode is finished
+    def receive_feedback(self, reward, done):  # done means an episode is finished
         self.buf_reward.append(reward)
 
-        if done: # one episode is finished
+        if done:  # one episode is finished
             self.prv_obs = deque([])
             for i in range(self.sag):
                 self.prv_obs.append(np.zeros(self.D))
@@ -163,13 +169,16 @@ class brain: # {{{
                     self.ttl_grad_W[k] += grad_W[k]
 
                 for k, v in self.model.iteritems():
-                    g = self.ttl_grad_W[k] # gradient
+                    g = self.ttl_grad_W[k]  # gradient
 
                     # Using RMSProp to update the Policy Network
-                    self.rmsprop_cache[k] = decay_rate * self.rmsprop_cache[k] + (1 - decay_rate) * g**2
-                    self.model[k] += learning_rate * g / (np.sqrt(self.rmsprop_cache[k]) + 1e-5)
+                    self.rmsprop_cache[k] = decay_rate * \
+                        self.rmsprop_cache[k] + (1 - decay_rate) * g**2
+                    self.model[k] += learning_rate * g / \
+                        (np.sqrt(self.rmsprop_cache[k]) + 1e-5)
 
-                    self.ttl_grad_W[k] = np.zeros_like(v) # set total gradient stored to 0
+                    # set total gradient stored to 0
+                    self.ttl_grad_W[k] = np.zeros_like(v)
 
                 # Pickled the brain
                 pickle.dump(self, open('brain_#' + str(id(self)) + '.p', 'wb'))
