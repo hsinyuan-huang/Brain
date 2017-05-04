@@ -174,4 +174,3 @@ class brain: # {{{
                 # Pickled the brain
                 pickle.dump(self, open('brain_#' + str(id(self)) + '.p', 'wb'))
 #}}}
-
